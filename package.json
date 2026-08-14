@@ -1,0 +1,52 @@
+{
+  "name": "meow-notify",
+  "version": "2.0.0",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "meow-notify": "./install.mjs"
+  },
+  "exports": {
+    ".": {
+      "default": "./index.js"
+    },
+    "./client": {
+      "default": "./client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "install.mjs",
+    "setup.mjs",
+    "install.bat",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "plugin",
+    "meow",
+    "push",
+    "notification"
+  ],
+  "license": "MIT",
+  "description": "DSH (DeepSeek Harness) push notification plugin: turn/end and approval/asked events to your phone via MeoW, with a Web GUI settings card. One-command install.",
+  "engines": {
+    "node": ">=18"
+  }
+}
