@@ -61,7 +61,6 @@
 **会话标签的来源**（优先级从高到低）：
 1. 会话标题（DSH 根据首条提问自动生成，也可在 Web UI 侧栏手动改名）
 2. 工作目录的最后一段（如 `E:\proj\app-server` → `app-server`）
-3. 兜底 `?`
 
 ---
 
@@ -70,7 +69,7 @@
 | 条件 | 说明 |
 |---|---|
 | DSH 已安装 | 能运行 `dsh web`（DeepSeek Harness CLI） |
-| Node.js ≥ 18 | 插件用全局 `fetch`；DSH 本身跑在 Node 上，一般已满足（开发机为 v24） |
+| Node.js ≥ 18 | 插件用全局 `fetch`；DSH 本身跑在 Node 上 |
 | MeoW App | 手机安装 [MeoW](https://www.chuckfang.com/MeoW/api_doc.html)（鸿蒙消息提醒应用），**注册并记下你的接收昵称（nickname）** |
 | 网络 | 运行 DSH 的电脑能访问 `https://api.chuckfang.com` |
 
@@ -99,7 +98,6 @@ install.bat uninstall                        :: 卸载
 **注意事项：**
 - 需要先安装 Node.js 18+ 和 DSH（`dsh web` 至少运行过一次）。
 - 若提示文件写入失败，右键 `install.bat` →「以管理员身份运行」。
-- bat 界面为英文（避免 Windows 编码兼容问题）；过程中的中文提示由安装脚本输出。
 
 ---
 
@@ -233,7 +231,7 @@ GUI 保存的内容写入 `$DSH_HOME/settings.yaml`：
 
 ```yaml
 meow-notify:
-  nickname: "1529e2a0"
+  nickname: "<nickname>"
   turnEndMinIntervalMs: 60000
 ```
 
