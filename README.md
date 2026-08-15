@@ -24,6 +24,7 @@
 8. [禁用与卸载](#8-禁用与卸载)
 9. [常见问题排查](#9-常见问题排查)
 10. [目录结构与开发](#10-目录结构与开发)
+11. [友情链接](#11-友情链接)
 
 ---
 
@@ -385,3 +386,14 @@ meow-notify/
 - client 端 bundle 以 `window.__ModuleLoader__.load({ id, factory })` 格式编写，`factory` 的 `require` 只能使用 web 前端的静态模块表（react、`@deepseek-ai/dsh-client-runtime` 等）与 `dsh.client.inject` 注入的模块，**不能** import 其他 npm 包。
 - host 端用 `installSettingsSection(ctx, NS, Config, config, hooks)`（来自 `@deepseek-ai/dsh-settings`）把配置挂到 settings 域；`Config` 是 schemastery schema，GUI 卡片与配置校验共用同一份定义。
 - 配置合并顺序：schema 默认值 ← patch config（base）← settings.yaml（user）。GUI 只写 user 层。
+
+---
+
+## 11. 友情链接
+
+| 链接 | 说明 |
+|---|---|
+| [MeoW 官方 API 文档](https://www.chuckfang.com/MeoW/api_doc.html) | 本插件的推送接收端（鸿蒙消息提醒 App）。API 文档、昵称注册、推送格式说明 |
+| [DeepSeek Harness (DSH)](https://www.deepseek.com/blog/harness-architecture) | 本插件所服务的框架（DeepSeek Harness 架构介绍） |
+
+> MeoW 是专为鸿蒙（HarmonyOS）用户打造的**消息提醒应用**：电脑端通过 HTTP 请求把文本推送到手机。本插件正是它的 DSH 侧集成——手机装 MeoW 并注册昵称，DSH 任务事件自动推送到手机通知栏。
