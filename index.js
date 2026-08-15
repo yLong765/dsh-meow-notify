@@ -1,9 +1,9 @@
-// meow-notify — DSH 全局通知插件（生产版 v8：host 端 + settings 集成）
+// meow-notify — DSH 全局通知插件（生产版 v9：host 端 + settings 集成 + 错误推送）
 //
 // 双端结构（host 端本文件；client 端见 client.js，GUI 配置卡片）：
 //   • host 端：注册 settings namespace「meow-notify」（GUI 卡片读写它），
 //     并监听 session/event 推送：
-//        - turn/end        -> DSH 任务完成
+//        - turn/end        -> DSH 任务完成（按 reason 分类：✅ 完成 / ⚠️ 异常 / ❌ 出错）
 //        - approval/asked  -> DSH 需要介入（紧急，优先）
 //   • 推送内容带「会话标识」：标题优先取会话标题(日志里的 session/title)，否则取工作目录名；
 //     子代理会话加 [子] 前缀。便于多任务并行时分辨是哪个会话。
@@ -17,11 +17,14 @@
 //
 // 客户端节流（应对 MeoW ~3/分钟静默限流：HTTP 仍回"发送成功"但实际不投递超量）：
 //   • approval/asked：始终发送（人工必须介入），且不占用完成推送的节流额度。
-//   • turn/end：距上一次完成推送不足 turnEndMinIntervalMs(默认 25s) 则跳过。
+//   • turn/end 出错（reason=error）：始终发送（错误必须及时知道），不节流。
+//   • turn/end 其他：距上一次完成推送不足 turnEndMinIntervalMs(默认 25s) 则跳过。
 //   • includeChildren(false)：可关闭子代理会话的通知。
 //
 // v7：节流时间戳只由 turn/end 维护——approval/asked 不再占用完成推送的额度。
 // v8：改为双端 npm 包：注册 settings namespace 供 GUI 卡片读写；LOG 跟随插件目录。
+// v9：turn/end 按 reason 分类推送——error 推 ❌（带错误信息，不节流），
+//     aborted/blocked/interrupted 推 ⚠️，其余完成推 ✅。
 import { appendFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -32,12 +35,16 @@ const name = 'meow-notify';
 const NS = 'meow-notify';
 const LOG = join(dirname(fileURLToPath(import.meta.url)), 'notify.log');
 
+/** 默认值常量：与 install.mjs 的 DEFAULT_BASE 保持一致；改默认地址时两处同步。 */
+const DEFAULT_BASE = 'https://api.chuckfang.com';
+const DEFAULT_TURN_END_INTERVAL_MS = 25000;
+
 /** Schemastery schema：GUI 卡片与 settings 域共用同一份字段定义。 */
 const Config = z.object({
   enabled: z.boolean().default(true),
   nickname: z.string(),
-  base: z.string().default('https://api.chuckfang.com'),
-  turnEndMinIntervalMs: z.number().default(25000),
+  base: z.string().default(DEFAULT_BASE),
+  turnEndMinIntervalMs: z.number().default(DEFAULT_TURN_END_INTERVAL_MS),
   includeChildren: z.boolean().default(true),
 });
 
@@ -112,8 +119,8 @@ function apply(ctx, config) {
   function push(headline, body, throttle) {
     const cfg = effective() || {};
     const nickname = cfg.nickname;
-    const base = String(cfg.base || 'https://api.chuckfang.com').replace(/\/+$/, '');
-    const turnEndMinIntervalMs = Number(cfg.turnEndMinIntervalMs ?? 25000);
+    const base = String(cfg.base || DEFAULT_BASE).replace(/\/+$/, '');
+    const turnEndMinIntervalMs = Number(cfg.turnEndMinIntervalMs ?? DEFAULT_TURN_END_INTERVAL_MS);
     const now = Date.now();
     if (throttle && (now - lastTurnEndPushTs) < turnEndMinIntervalMs) {
       filelog('SKIP-THROTTLE [' + headline + '] gap=' + (now - lastTurnEndPushTs) + 'ms < ' + turnEndMinIntervalMs + 'ms');
@@ -139,8 +146,8 @@ function apply(ctx, config) {
       const cfg = effective() || {};
       const nickname = cfg.nickname;
       const enabled = cfg.enabled !== false;
-      const base = String(cfg.base || 'https://api.chuckfang.com').replace(/\/+$/, '');
-      const turnEndMinIntervalMs = Number(cfg.turnEndMinIntervalMs ?? 25000);
+      const base = String(cfg.base || DEFAULT_BASE).replace(/\/+$/, '');
+      const turnEndMinIntervalMs = Number(cfg.turnEndMinIntervalMs ?? DEFAULT_TURN_END_INTERVAL_MS);
       const includeChildren = cfg.includeChildren !== false;
       if (!enabled || !nickname) { filelog('NOT-ENABLED'); return; }
       if (d.isChild && !includeChildren) return; // 按需忽略子代理
@@ -153,18 +160,38 @@ function apply(ctx, config) {
         push('⚠️ ' + d.label, body, false);
       } else if (t === 'turn/end') {
         const ed = event.data || {};
-        let reason = 'done';
-        try { if (ed.reason && ed.reason.kind) reason = ed.reason.kind; } catch (_) {}
-        const body = '第 ' + (ed.turn == null ? '?' : ed.turn) + ' 轮 · ' + reason + (d.title ? ' · ' + (d.dir || '') : '');
-        filelog('EVENT turn/end turn=' + (ed.turn == null ? '?' : ed.turn) + ' reason=' + reason + ' label=' + d.label);
-        push('✅ ' + d.label, body, true);
+        let reason = 'completed';
+        let errorMsg = '';
+        try {
+          if (ed.reason && ed.reason.kind) reason = ed.reason.kind;
+          if (ed.reason && ed.reason.error) {
+            const er = ed.reason.error;
+            errorMsg = (er && (er.message || er.code || er.name)) || '';
+          }
+        } catch (_) {}
+        const turn = ed.turn == null ? '?' : ed.turn;
+        const loc = d.title ? ' · ' + (d.dir || '') : '';
+        filelog('EVENT turn/end turn=' + turn + ' reason=' + reason + ' label=' + d.label);
+        if (reason === 'error') {
+          // 出错：最紧急，永不节流；带错误信息
+          const body = '第 ' + turn + ' 轮出错' + (errorMsg ? '：' + clamp(errorMsg, 60) : '') + loc;
+          push('❌ ' + d.label, body, false);
+        } else if (reason === 'aborted' || reason === 'blocked' || reason === 'interrupted') {
+          // 异常结束：提示，受节流限制
+          const body = '第 ' + turn + ' 轮 · ' + reason + loc;
+          push('⚠️ ' + d.label, body, true);
+        } else {
+          // 正常完成（completed / max-tokens 等）
+          const body = '第 ' + turn + ' 轮 · ' + reason + loc;
+          push('✅ ' + d.label, body, true);
+        }
       }
     } catch (e) { filelog('HANDLER-ERROR ' + (e && e.message)); }
   });
 
   const cfg = effective() || {};
-  filelog('LOADED v8 nickname=' + (cfg.nickname || '(unset)') + ' base=' + (cfg.base || '') + ' interval=' + (cfg.turnEndMinIntervalMs ?? 25000) + 'ms includeChildren=' + (cfg.includeChildren !== false) + ' node=' + process.version);
-  if (cfg.enabled !== false && cfg.nickname) push('meow-notify', '插件已加载 v8 · ' + cfg.nickname, false);
+  filelog('LOADED v9 nickname=' + (cfg.nickname || '(unset)') + ' base=' + (cfg.base || '') + ' interval=' + (cfg.turnEndMinIntervalMs ?? DEFAULT_TURN_END_INTERVAL_MS) + 'ms includeChildren=' + (cfg.includeChildren !== false) + ' node=' + process.version);
+  if (cfg.enabled !== false && cfg.nickname) push('meow-notify', '插件已加载 v9 · ' + cfg.nickname, false);
 }
 
 export { name, apply };

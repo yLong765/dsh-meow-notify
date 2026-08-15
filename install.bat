@@ -75,7 +75,7 @@ if errorlevel 1 (
     echo.
     echo  ===== INSTALL COMPLETE =====
     echo    1. Restart DSH: run  dsh web  in a terminal
-    echo    2. Your phone should receive a "plugin loaded v8" push
+    echo    2. Your phone should receive a "plugin loaded v9" push
     echo    3. Open browser - Settings - Plugins - Plugin config
     echo       you should see the "MeoW push" card; edit and save
 )

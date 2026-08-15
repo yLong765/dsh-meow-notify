@@ -1,4 +1,4 @@
-# meow-notify — DSH 消息推送插件（双端版 v8）
+# meow-notify — DSH 消息推送插件（双端版 v9）
 
 把 DSH（DeepSeek Harness）的关键事件推送到手机（MeoW App），并支持在 **Web 设置页的「插件配置」卡片**里直接修改配置：
 
@@ -53,8 +53,10 @@
 
 | 事件 | 推送标题 | 推送正文 |
 |---|---|---|
-| 插件加载 | `meow-notify` | 插件已加载 v8 · <昵称> |
+| 插件加载 | `meow-notify` | 插件已加载 v9 · <昵称> |
 | 任务完成 | `✅ <会话标题或目录名>` | 第 N 轮 · <原因> · <目录名> |
+| 任务异常结束 | `⚠️ <会话标题或目录名>` | 第 N 轮 · aborted/blocked/interrupted · <目录名> |
+| **任务出错** | `❌ <会话标题或目录名>` | 第 N 轮出错：<错误信息> · <目录名>（**不节流**） |
 | 需要介入 | `⚠️ <会话标题或目录名>` | <工具名> 等待批准 · <目录名> |
 | 子代理会话 | 上述标题加 `[子] ` 前缀 | 同上 |
 
@@ -178,14 +180,14 @@ const WEB_SETTINGS_NAMESPACES = [
 dsh web
 ```
 
-重启后 1~2 秒内，手机应收到 **「meow-notify / 插件已加载 v8 · 你的昵称」**——收到即安装成功。
+重启后 1~2 秒内，手机应收到 **「meow-notify / 插件已加载 v9 · 你的昵称」**——收到即安装成功。
 
 ### 第 5 步：打开 GUI 卡片
 
 浏览器打开 DSH Web（`http://127.0.0.1:3080`）→ **设置 → 插件 → 插件配置**，应能看到 **「MeoW 推送」** 卡片：
 
 - 展开可编辑：MeoW 昵称、推送 API 地址、完成推送最小间隔、是否通知子代理会话
-- 改完点**保存**：写入 `$DSH_HOME/settings.yaml` 的 `meow-notify` 段，**1~2 秒热生效**（手机收到一条「插件已加载 v8」确认）
+- 改完点**保存**：写入 `$DSH_HOME/settings.yaml` 的 `meow-notify` 段，**1~2 秒热生效**（手机收到一条「插件已加载 v9」确认）
 - 字段旁的「已覆盖」徽标表示该字段被 user 层覆盖（相对 patch config / 默认值），可点恢复默认
 
 > 如果看不到卡片：确认 `name` 是包名、包在 `profiles/node_modules/meow-notify/`、**已运行 `node setup.mjs` 打平台补丁并重启 DSH**，然后刷新浏览器页面（卡片由前端启动时加载，改包后需要刷新或重启）。
@@ -200,8 +202,8 @@ dsh web
 2. **GUI 验证**：设置 → 插件 → 插件配置 → 出现「MeoW 推送」卡片，能保存配置。
 3. **日志验证**：查看插件目录下的 `notify.log`（在 `profiles/node_modules/meow-notify/` 下，首次推送后自动生成），应有：
    ```
-   2026-08-14T14:17:07.025Z LOADED v8 nickname=xxx base=https://api.chuckfang.com interval=25000ms includeChildren=true node=v24.14.0
-   2026-08-14T14:17:07.2xxZ PUSH-OK [meow-notify] 插件已加载 v8 · xxx :: {"status":200,"data":true,"msg":"发送成功"}
+   2026-08-14T14:17:07.025Z LOADED v9 nickname=xxx base=https://api.chuckfang.com interval=25000ms includeChildren=true node=v24.14.0
+   2026-08-14T14:17:07.2xxZ PUSH-OK [meow-notify] 插件已加载 v9 · xxx :: {"status":200,"data":true,"msg":"发送成功"}
    ```
 4. **事件验证**：随便让 agent 干个活（或发条消息），这轮结束时手机收到「✅ …」；触发一次需要授权的操作（比如让 agent 写工作区外的文件），收到「⚠️ …」。
 
@@ -258,7 +260,8 @@ meow-notify:
 MeoW 服务端有**约每分钟 3 条**的静默限流：超量请求 HTTP 仍返回「发送成功」，但手机实际收不到。因此插件内置客户端节流：
 
 - `approval/asked`（需要介入）**永不节流**——人工介入最紧急，且这类事件本身稀少；它的发送也**不占用**完成推送的节流额度。
-- `turn/end`（任务完成）维护自己的节流时间戳：距上一次完成推送不足 `turnEndMinIntervalMs` 就跳过，保证完成推送 ≤ 约 2.4 条/分钟，把额度让给介入通知。
+- `turn/end` 且 reason 为 `error`（任务出错）**永不节流**——错误必须及时知道，推送带错误信息。
+- `turn/end` 其他（完成/异常/超限）维护自己的节流时间戳：距上一次完成推送不足 `turnEndMinIntervalMs` 就跳过，保证完成推送 ≤ 约 2.4 条/分钟，把额度让给介入和错误通知。
 - 节流是**跨所有会话全局**的（多会话叠加也不会超限）。
 
 ---
@@ -359,7 +362,7 @@ GUI 保存后等 1~2 秒（热生效），手机会收到一条新「插件已�
 
 ```
 meow-notify/
-├── index.js        ← host 端（v8）：settings 注册 + 推送逻辑
+├── index.js        ← host 端（v9）：settings 注册 + 推送逻辑
 ├── client.js       ← client 端：GUI 配置卡片（__ModuleLoader__.load 格式）
 ├── install.mjs     ← 一键安装/卸载脚本（被 install.bat 调用）
 ├── install.bat     ← Windows 一键安装入口（双击即用）

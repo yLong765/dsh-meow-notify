@@ -73,8 +73,11 @@ function findApiproxy() {
       if (resolved) return { apiproxy: resolved, root: c };
     }
   }
-  // 全局回退：当前目录、npx 缓存
-  const globalCandidates = [process.cwd(), join(homedir(), 'AppData', 'Local', 'npm-cache', '_npx')];
+  // 全局回退：当前目录、npx 缓存（Windows: %LOCALAPPDATA%/npm-cache/_npx；macOS/Linux: ~/.npm/_npx）
+  const npxCacheBase = process.platform === 'win32'
+    ? join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'npm-cache')
+    : join(homedir(), '.npm');
+  const globalCandidates = [process.cwd(), join(npxCacheBase, '_npx')];
   const expanded = [];
   for (const c of globalCandidates) {
     if (c.endsWith('_npx') && existsSync(c)) {
@@ -119,7 +122,9 @@ function patchApiproxy(apiproxyPath) {
 /** 幂等地把 meow-notify 条目写进 $DSH_HOME/cordis.patch.yml。 */
 function registerPatch(dshHome, nickname) {
   const patchFile = join(dshHome, 'cordis.patch.yml');
-  const entryBlock = `- insert:\n    - id: meow-notify\n      name: 'meow-notify'\n      config:\n        enabled: true\n        nickname: "${nickname}"\n        base: "https://api.chuckfang.com"\n`;
+  // base 默认值与 index.js 的 Config schema 保持一致；改默认地址时两处同步。
+  const DEFAULT_BASE = 'https://api.chuckfang.com';
+  const entryBlock = `- insert:\n    - id: meow-notify\n      name: 'meow-notify'\n      config:\n        enabled: true\n        nickname: "${nickname}"\n        base: "${DEFAULT_BASE}"\n`;
   const header = `# DSH 全局补丁层：对所有 profile 生效，运行中修改会被热加载。\n`;
   if (!existsSync(patchFile)) {
     write(patchFile, header + entryBlock);
@@ -150,7 +155,7 @@ function registerPatch(dshHome, nickname) {
 function deployFiles(dshHome) {
   const destDir = join(dshHome, 'profiles', 'node_modules', PKG_NAME);
   ensureDir(destDir);
-  const files = ['index.js', 'client.js', 'package.json', 'README.md', 'install.mjs', 'setup.mjs'];
+  const files = ['index.js', 'client.js', 'package.json', 'README.md', 'install.mjs', 'setup.mjs', 'install.bat'];
   for (const f of files) {
     const src = join(HERE, f);
     if (!existsSync(src)) continue;
@@ -242,7 +247,7 @@ async function main() {
   console.log('\n=== 安装完成 ===');
   console.log('下一步：');
   console.log('  1. 重启 DSH：dsh web');
-  console.log('  2. 手机应收到「插件已加载 v8 · 你的昵称」推送');
+  console.log('  2. 手机应收到「插件已加载 v9 · 你的昵称」推送');
   console.log('  3. 浏览器打开设置 → 插件 → 插件配置，可看到「MeoW 推送」卡片');
   if (dryRun) console.log('\n（演练模式：未写入任何文件）');
 }
