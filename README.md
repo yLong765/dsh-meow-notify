@@ -1,4 +1,4 @@
-# meow-notify — DSH 消息推送插件（双端版 v8 · npm 一键安装）
+# meow-notify — DSH 消息推送插件（双端版 v8）
 
 把 DSH（DeepSeek Harness）的关键事件推送到手机（MeoW App），并支持在 **Web 设置页的「插件配置」卡片**里直接修改配置：
 
@@ -8,8 +8,6 @@
 
 推送内容带**会话标题 / 工作目录名**，多个任务并行时一眼分清是哪个会话。
 
-**安装一条命令**：`npm i -g meow-notify && meow-notify install`（自动完成部署、平台补丁、配置注册，见第 3 节）。
-
 ---
 
 ## 目录
@@ -17,9 +15,8 @@
 1. [工作原理](#1-工作原理)
 2. [前置条件](#2-前置条件)
 3. [安装](#3-安装)
-   - [方式 A：npm 一键安装（推荐）](#方式-a-npm-一键安装推荐)
-   - [方式 B：Windows 源码一键安装（install.bat）](#方式-b-windows-源码一键安装installbat)
-   - [方式 C：手动安装](#方式-c-手动安装)
+   - [方式 A：Windows 源码一键安装（install.bat）](#方式-a-windows-源码一键安装installbat)
+   - [方式 B：手动安装](#方式-b-手动安装)
 4. [验证安装](#4-验证安装)
 5. [可调节的配置项](#5-可调节的配置项)
 6. [日常使用](#6-日常使用)
@@ -83,43 +80,9 @@
 
 ## 3. 安装
 
-### 方式 A：npm 一键安装（推荐）
+### 方式 A：Windows 源码一键安装（install.bat）
 
-包已发布到 npm，**两条命令完成全部安装**（自动部署文件、打平台补丁、注册配置）：
-
-```bash
-npm install -g meow-notify
-meow-notify install          # 交互式，会询问 MeoW 昵称
-# 或非交互：meow-notify install --nickname=你的昵称
-```
-
-`install` 命令自动完成：
-1. **定位 DSH**：解析 `@deepseek-ai/dsh-host-apiproxy` 的安装位置（支持 `$DSH_HOME` 自定义）
-2. **部署文件**：把插件复制到 `$DSH_HOME/profiles/node_modules/meow-notify/`
-3. **打平台补丁**：把 `meow-notify` 加入 `WEB_SETTINGS_NAMESPACES`（DSH 的 Web 设置允许列表，见下方说明）
-4. **注册配置**：幂等地把插件条目写入 `$DSH_HOME/cordis.patch.yml`
-
-然后重启 DSH：
-```bash
-dsh web
-```
-
-**卸载**：`meow-notify uninstall`（移除 patch 条目和平台补丁，保留插件文件）。
-
-> **为什么需要平台补丁？** DSH 的 host-apiproxy 硬编码了 Web 设置允许列表
-> `WEB_SETTINGS_NAMESPACES`，只有列表里的 settings namespace 才会被浏览器端
-> `settings.describe` 返回、才能被 GUI 配置卡片读写。当前 DSH 版本（0.1.0-rc.x）
-> **第三方插件无法自行暴露配置**（官方注释称此为 "deferred work"），必须把
-> `meow-notify` 加入该列表。安装脚本自动完成；**DSH 升级后补丁可能丢失**，
-> 重新运行 `meow-notify install` 即可恢复。
-
-> **没装 npm 或想离线安装？** 见方式 B（Windows 一键）或方式 C（手动）。
-
----
-
-### 方式 B：Windows 源码一键安装（install.bat）
-
-适用于**下载源码包/离线分发**的场景（无需 npm）：
+适用于**下载源码包/离线分发**的场景：
 
 1. 下载并解压源码包（含 `install.bat`、`install.mjs`、`index.js`、`client.js` 等文件）
 2. **双击 `install.bat`**，在菜单里输入 `1` 回车
@@ -140,9 +103,9 @@ install.bat uninstall                        :: 卸载
 
 ---
 
-### 方式 C：手动安装
+### 方式 B：手动安装
 
-共 3 步：放包 → 注册 → 重启。**插件以 npm 包形态安装**，这样才能同时加载 host 端（推送）和 client 端（GUI 卡片）。
+共 3 步：放包 → 注册 → 重启。**插件以包形态安装**（放在 `profiles/node_modules` 下），这样才能同时加载 host 端（推送）和 client 端（GUI 卡片）。
 
 ### 第 1 步：放置插件包
 
@@ -161,7 +124,7 @@ install.bat uninstall                        :: 卸载
 # DSH 全局补丁层：对所有 profile 生效，运行中修改会被热加载。
 - insert:
     - id: meow-notify
-      name: 'meow-notify'        # npm 包名：host 端从 index.js 加载，client 端自动被发现
+      name: 'meow-notify'        # 包名：host 端从 index.js 加载，client 端自动被发现
       config:
         enabled: true
         nickname: "你的MeoW昵称"  # ← 必填：MeoW App 里注册的接收昵称
@@ -400,7 +363,9 @@ GUI 保存后等 1~2 秒（热生效），手机会收到一条新「插件已�
 meow-notify/
 ├── index.js        ← host 端（v8）：settings 注册 + 推送逻辑
 ├── client.js       ← client 端：GUI 配置卡片（__ModuleLoader__.load 格式）
-├── setup.mjs       ← 安装补丁脚本（把 meow-notify 加入 DSH 的 Web 设置允许列表）
+├── install.mjs     ← 一键安装/卸载脚本（被 install.bat 调用）
+├── install.bat     ← Windows 一键安装入口（双击即用）
+├── setup.mjs       ← 平台补丁独立工具（把 meow-notify 加入 DSH 的 Web 设置允许列表）
 ├── package.json    ← 双端声明（exports["./client"] + dsh.client 元数据）
 └── README.md       ← 本文档
 ```
@@ -411,7 +376,7 @@ meow-notify/
 |---|---|---|
 | `index.js` | Node（DSH 进程） | `apply(ctx, config)`：注册 settings namespace「meow-notify」+ 监听 `session/event` 推送 |
 | `client.js` | 浏览器 | `apply(ctx)`：注册 `settings.plugin.item` 卡片，绑定 `settingsScope` |
-| `install.mjs` | 命令行 | 一键安装/卸载（bin: `meow-notify`） |
+| `install.bat` / `install.mjs` | 命令行 | 一键安装/卸载（bat 为 Windows 双击入口，mjs 为核心逻辑） |
 | `setup.mjs` | 命令行 | 仅平台补丁（安装脚本已内含，单独提供作兜底） |
 
 **关键约定：**
@@ -419,30 +384,3 @@ meow-notify/
 - client 端 bundle 以 `window.__ModuleLoader__.load({ id, factory })` 格式编写，`factory` 的 `require` 只能使用 web 前端的静态模块表（react、`@deepseek-ai/dsh-client-runtime` 等）与 `dsh.client.inject` 注入的模块，**不能** import 其他 npm 包。
 - host 端用 `installSettingsSection(ctx, NS, Config, config, hooks)`（来自 `@deepseek-ai/dsh-settings`）把配置挂到 settings 域；`Config` 是 schemastery schema，GUI 卡片与配置校验共用同一份定义。
 - 配置合并顺序：schema 默认值 ← patch config（base）← settings.yaml（user）。GUI 只写 user 层。
-
----
-
-## 11. 发布到 npm（维护者）
-
-插件已配置为可直接发布的 npm 包（`bin` + `files` 清单就绪）。发布步骤：
-
-```bash
-# 1. 登录 npm（首次）
-npm login
-
-# 2. 检查包内容（应只有 6 个文件：README、client.js、index.js、install.mjs、package.json、setup.mjs）
-npm pack --dry-run
-
-# 3. 发布
-npm publish
-
-# 4. 以后升级代码后
-npm version patch   # 或 minor / major
-npm publish
-```
-
-**发布注意事项：**
-- **不要声明 `dependencies`/`peerDependencies` 指向 `@deepseek-ai/*` 的 rc 包**——它们在公共 npm registry 不可解析（曾导致 ERESOLVE 安装失败）。这些依赖由 DSH 环境自身提供（profile 的 flat fallback），插件作为 DSH 插件从不独立运行。
-- `install.mjs` 已加 `#!/usr/bin/env node` shebang，npm 生成的 `meow-notify` 命令可直接执行。
-- 平台补丁（`WEB_SETTINGS_NAMESPACES`）是 DSH 当前版本的硬限制；**若未来 DSH 开放插件自行暴露 settings**，安装脚本的补丁步骤会自动变为 no-op（检测到已含则跳过），插件代码无需改动。
-- 升级插件代码（`index.js`/`client.js`）后，已安装用户重跑 `meow-notify install`（会重新复制文件）+ 重启 DSH 即可更新。
